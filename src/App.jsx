@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 
-const socket = io("https://chat-1-0afu.onrender.com", {
+const socket = io("https://chat-1-0afu.onrender.com" , {
   transports: ["websocket", "polling"]
 });
 
