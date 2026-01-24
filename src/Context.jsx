@@ -4,7 +4,7 @@ import io from "socket.io-client";
 const CallContext = createContext();
 export const useCall = () => useContext(CallContext);
 
-const socket = io("http://localhost:5000");
+const socket = io("srv-d5q7pfh4tr6s73d99v9g");
 
 const config = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
