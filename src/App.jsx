@@ -1,163 +1,130 @@
 import { useEffect, useRef, useState } from "react";
-import { io } from "socket.io-client";
+import io from "socket.io-client";
 
-const socket = io("https://chat-1-0afu.onrender.com" , {
-  transports: ["websocket", "polling"]
-});
+const socket = io("http://localhost:5000");
 
-const App = () => {
-  const localAudioRef = useRef(null);
-  const remoteAudioRef = useRef(null);
-  const peerRef = useRef(null);
-  const callRoleRef = useRef(null); // "caller" | "receiver"
+const config = {
+  iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+};
 
+function App() {
   const [myId, setMyId] = useState("");
-  const [incomingCall, setIncomingCall] = useState(null);
-  const [show,setShow]=useState("")
+  const [callTo, setCallTo] = useState("");
+
+  const localStream = useRef(null);
+  const peer = useRef(null);
+  const remoteAudio = useRef(null);
+
+  const iceQueue = useRef([]);
+  const remoteDescSet = useRef(false);
 
   useEffect(() => {
     socket.on("connect", () => {
-      console.log("Connected:", socket.id);
       setMyId(socket.id);
     });
 
-    socket.on("incoming-call", ({ from, offer }) => {
-      callRoleRef.current = "receiver";
-      setIncomingCall({ from, offer });
+    // RECEIVER
+    socket.on("incoming-call", async ({ from, offer }) => {
+      await startAudio();
+
+      peer.current = createPeer(from);
+
+      await peer.current.setRemoteDescription(offer);
+      remoteDescSet.current = true;
+
+      flushIce();
+
+      const answer = await peer.current.createAnswer();
+      await peer.current.setLocalDescription(answer);
+
+      socket.emit("answer-call", { to: from, answer });
     });
 
+    // CALLER
     socket.on("call-answered", async ({ answer }) => {
-      if (
-        callRoleRef.current === "caller" &&
-        peerRef.current &&
-        peerRef.current.signalingState === "have-local-offer"
-      ) {
-        await peerRef.current.setRemoteDescription(answer);
+      if (peer.current && !remoteDescSet.current) {
+        await peer.current.setRemoteDescription(answer);
+        remoteDescSet.current = true;
+        flushIce();
       }
     });
 
     socket.on("ice-candidate", ({ candidate }) => {
-      if (peerRef.current && candidate) {
-        peerRef.current.addIceCandidate(candidate);
+      if (remoteDescSet.current && peer.current) {
+        peer.current.addIceCandidate(candidate);
+      } else {
+        iceQueue.current.push(candidate);
       }
     });
-
-    socket.on("call-ended", endCall);
-
-    return () => {
-      socket.off();
-      socket.disconnect();
-    };
   }, []);
 
-  const createPeer = (to) => {
-    const peer = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-    });
+  const startAudio = async () => {
+    if (!localStream.current) {
+      localStream.current = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: false,
+      });
+    }
+  };
 
-    peer.onicecandidate = (e) => {
+  const createPeer = (to) => {
+    const pc = new RTCPeerConnection(config);
+
+    localStream.current.getTracks().forEach((track) =>
+      pc.addTrack(track, localStream.current)
+    );
+
+    pc.ontrack = (e) => {
+      remoteAudio.current.srcObject = e.streams[0];
+    };
+
+    pc.onicecandidate = (e) => {
       if (e.candidate) {
         socket.emit("ice-candidate", {
           to,
-          candidate: e.candidate
+          candidate: e.candidate,
         });
       }
     };
 
-    peer.ontrack = (e) => {
-      console.log("Remote audio stream received");
-      setShow("Remote audio stream received")
-      remoteAudioRef.current.srcObject = e.streams[0];
-
-      // 🔥 autoplay fix
-      setTimeout(() => {
-        remoteAudioRef.current
-          .play()
-          .catch(() => {});
-      }, 300);
-    };
-
-    navigator.mediaDevices
-      .getUserMedia({ audio: true })
-      .then((stream) => {
-        console.log("Mic access granted");
-        setShow("Mic access granted")
-        localAudioRef.current.srcObject = stream;
-
-        stream.getTracks().forEach((track) =>
-          peer.addTrack(track, stream)
-        );
-      })
-      .catch(() => alert("Please allow microphone"));
-
-    return peer;
+    return pc;
   };
 
-  const startCall = async () => {
-    const to = prompt("Enter receiver socket ID");
-    if (!to) return;
-
-    callRoleRef.current = "caller";
-    peerRef.current = createPeer(to);
-
-    const offer = await peerRef.current.createOffer();
-    await peerRef.current.setLocalDescription(offer);
-
-    socket.emit("call-user", { to, offer });
+  const flushIce = () => {
+    iceQueue.current.forEach((c) => peer.current.addIceCandidate(c));
+    iceQueue.current = [];
   };
 
-  const acceptCall = async () => {
-    peerRef.current = createPeer(incomingCall.from);
+  const callUser = async () => {
+    await startAudio();
 
-    await peerRef.current.setRemoteDescription(incomingCall.offer);
+    peer.current = createPeer(callTo);
 
-    const answer = await peerRef.current.createAnswer();
-    await peerRef.current.setLocalDescription(answer);
+    const offer = await peer.current.createOffer();
+    await peer.current.setLocalDescription(offer);
 
-    socket.emit("answer-call", {
-      to: incomingCall.from,
-      answer
+    socket.emit("call-user", {
+      to: callTo,
+      offer,
     });
-
-    setIncomingCall(null);
-
-    // 🔥 autoplay fix on user interaction
-    setTimeout(() => {
-      remoteAudioRef.current
-        .play()
-        .catch(() => {});
-    }, 300);
-  };
-
-  const endCall = () => {
-    peerRef.current?.getSenders().forEach((s) => s.track?.stop());
-    peerRef.current?.close();
-    peerRef.current = null;
-    remoteAudioRef.current.srcObject = null;
   };
 
   return (
     <div style={{ padding: 20 }}>
-      <h2>🎧 Audio Call App</h2> 
-
-      <p><b>My Socket ID:</b></p>
+      <h3>My Socket ID</h3>
       <p>{myId}</p>
 
-      <button onClick={startCall}>Start Call</button>
+      <input
+        placeholder="Enter other user socket ID"
+        value={callTo}
+        onChange={(e) => setCallTo(e.target.value)}
+      />
+      <br /><br />
+      <button onClick={callUser}>Call</button>
 
-      {incomingCall && (
-        <div style={{ marginTop: 20 }}>
-          <p>📞 Incoming call from</p>
-          <p>{incomingCall.from}</p>
-          <button onClick={acceptCall}>Accept</button>
-          {show}
-        </div>
-      )}
-
-      <audio ref={localAudioRef} autoPlay muted />
-      <audio ref={remoteAudioRef} autoPlay />
+      <audio ref={remoteAudio} autoPlay />
     </div>
   );
-};
+}
 
 export default App;
