@@ -4,7 +4,7 @@ import io from "socket.io-client";
 const CallContext = createContext();
 export const useCall = () => useContext(CallContext);
 
-const socket = io("http://localhost:5000");
+const socket = io("https://chatting-wun1.onrender.com");
 
 const config = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
