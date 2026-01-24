@@ -4,14 +4,14 @@ import io from "socket.io-client";
 const CallContext = createContext();
 export const useCall = () => useContext(CallContext);
 
-const socket = io("https://chatting-wun1.onrender.com");
+const socket = io("http://localhost:5000");
 
 const config = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
 };
 
 export const CallProvider = ({ children }) => {
-  const [myId, setMyId] = useState("");
+  const [myId, setMyId] = useState("");           // 🔥 MANUAL ID
   const [incoming, setIncoming] = useState(null);
   const [callActive, setCallActive] = useState(false);
 
@@ -28,20 +28,18 @@ export const CallProvider = ({ children }) => {
     console.log("📡 INIT SOCKET");
 
     socket.on("connect", () => {
-      console.log("✅ SOCKET CONNECTED:", socket.id);
-      setMyId(socket.id);
+      console.log("✅ SOCKET CONNECTED");
+      // ❌ DO NOT set socket.id here
     });
 
     socket.on("incoming-call", ({ from, offer, type }) => {
-      console.log("📞 INCOMING CALL from", from, "type:", type);
+      console.log("📞 INCOMING CALL from", from);
       setIncoming({ from, offer, type });
     });
 
     socket.on("call-answered", async ({ answer }) => {
-      console.log("📨 CALL ANSWER RECEIVED");
       if (peer.current && peer.current.signalingState !== "stable") {
         await peer.current.setRemoteDescription(answer);
-        console.log("✅ REMOTE DESCRIPTION SET (ANSWER)");
         remoteDescSet.current = true;
         flushIce();
         setCallActive(true);
@@ -49,9 +47,7 @@ export const CallProvider = ({ children }) => {
     });
 
     socket.on("ice-candidate", ({ candidate }) => {
-      console.log("🧊 ICE CANDIDATE RECEIVED");
       if (!peer.current) return;
-
       if (remoteDescSet.current) {
         peer.current.addIceCandidate(candidate);
       } else {
@@ -59,10 +55,7 @@ export const CallProvider = ({ children }) => {
       }
     });
 
-    socket.on("call-ended", () => {
-      console.log("❌ CALL ENDED");
-      endCall();
-    });
+    socket.on("call-ended", endCall);
 
     return () => {
       socket.off("incoming-call");
@@ -72,17 +65,19 @@ export const CallProvider = ({ children }) => {
     };
   }, []);
 
+  // 🔐 REGISTER MANUAL ID
+  const registerUser = (id) => {
+    if (!id) return;
+    setMyId(id);
+    socket.emit("register", id);
+    console.log("🆔 REGISTERED AS:", id);
+  };
+
   const startMedia = async (video) => {
-    console.log("🎤 REQUESTING MEDIA. Video:", video);
     localStream.current = await navigator.mediaDevices.getUserMedia({
       audio: true,
       video,
     });
-
-    console.log(
-      "🎧 AUDIO TRACKS:",
-      localStream.current.getAudioTracks().length
-    );
 
     if (video && localVideo.current) {
       localVideo.current.srcObject = localStream.current;
@@ -90,29 +85,24 @@ export const CallProvider = ({ children }) => {
   };
 
   const createPeer = (to) => {
-    console.log("🔗 CREATING PEER CONNECTION");
     const pc = new RTCPeerConnection(config);
 
-    localStream.current.getTracks().forEach((track) => {
-      console.log("➕ ADD TRACK:", track.kind);
-      pc.addTrack(track, localStream.current);
-    });
+    localStream.current.getTracks().forEach((track) =>
+      pc.addTrack(track, localStream.current)
+    );
 
-    pc.ontrack = (e) => {
-      console.log("📡 ONTRACK EVENT:", e.streams);
-      if (remoteAudio.current) {
-        remoteAudio.current.srcObject = e.streams[0];
-        console.log("🔊 REMOTE AUDIO ATTACHED");
+    pc.ontrack = (event) => {
+      if (event.track.kind === "audio" && remoteAudio.current) {
+        remoteAudio.current.srcObject = new MediaStream([event.track]);
       }
-      if (remoteVideo.current) {
-        remoteVideo.current.srcObject = e.streams[0];
-        console.log("🎥 REMOTE VIDEO ATTACHED");
+
+      if (event.track.kind === "video" && remoteVideo.current) {
+        remoteVideo.current.srcObject = new MediaStream([event.track]);
       }
     };
 
     pc.onicecandidate = (e) => {
       if (e.candidate) {
-        console.log("🧊 SENDING ICE");
         socket.emit("ice-candidate", { to, candidate: e.candidate });
       }
     };
@@ -121,19 +111,17 @@ export const CallProvider = ({ children }) => {
   };
 
   const flushIce = () => {
-    console.log("🧊 FLUSHING ICE:", iceQueue.current.length);
     iceQueue.current.forEach((c) => peer.current.addIceCandidate(c));
     iceQueue.current = [];
   };
 
   const callUser = async (to, video) => {
-    console.log("📞 CALLING USER:", to);
+    if (!to) return;
     await startMedia(video);
     peer.current = createPeer(to);
 
     const offer = await peer.current.createOffer();
     await peer.current.setLocalDescription(offer);
-    console.log("📤 OFFER SENT");
 
     socket.emit("call-user", {
       to,
@@ -143,18 +131,15 @@ export const CallProvider = ({ children }) => {
   };
 
   const acceptCall = async () => {
-    console.log("✅ ACCEPT CALL");
     await startMedia(incoming.type === "video");
     peer.current = createPeer(incoming.from);
 
     await peer.current.setRemoteDescription(incoming.offer);
-    console.log("📥 OFFER SET");
     remoteDescSet.current = true;
     flushIce();
 
     const answer = await peer.current.createAnswer();
     await peer.current.setLocalDescription(answer);
-    console.log("📤 ANSWER SENT");
 
     socket.emit("answer-call", {
       to: incoming.from,
@@ -166,7 +151,6 @@ export const CallProvider = ({ children }) => {
   };
 
   const endCall = () => {
-    console.log("❌ END CALL");
     peer.current?.close();
     localStream.current?.getTracks().forEach((t) => t.stop());
     setCallActive(false);
@@ -178,6 +162,7 @@ export const CallProvider = ({ children }) => {
     <CallContext.Provider
       value={{
         myId,
+        registerUser,   // 🔥 expose this
         callUser,
         incoming,
         acceptCall,

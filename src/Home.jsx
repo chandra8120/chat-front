@@ -1,10 +1,33 @@
 import { useState } from "react";
 import { useCall } from "./Context";
-//
-export default function CallsHome() {
-  const { callUser, myId } = useCall();
-  const [id, setId] = useState("");
 
+export default function CallsHome() {
+  const { registerUser, callUser, myId, callActive } = useCall();
+  const [myInputId, setMyInputId] = useState("");
+  const [callTo, setCallTo] = useState("");
+
+  if (callActive) return null;
+
+
+  if (!myId) {
+    return (
+      <div className="calls-page">
+        <input
+          placeholder="Create your ID (ex: 1234)"
+          onChange={(e) => setMyInputId(e.target.value)}
+        />
+
+        <button
+          className="call-btn audio-btn"
+          onClick={() => registerUser(myInputId)}
+        >
+          Save ID
+        </button>
+      </div>
+    );
+  }
+
+  // 📞 CALL SCREEN
   return (
     <>
       <div className="header">
@@ -14,8 +37,8 @@ export default function CallsHome() {
 
       <div className="calls-page">
         <input
-          placeholder="Enter User ID"
-          onChange={(e) => setId(e.target.value)}
+          placeholder="Enter user ID to call (ex: 1234)"
+          onChange={(e) => setCallTo(e.target.value)}
         />
 
         <div className="call-card">
@@ -25,7 +48,7 @@ export default function CallsHome() {
           </div>
           <button
             className="call-btn audio-btn"
-            onClick={() => callUser(id, false)}
+            onClick={() => callUser(callTo, false)}
           >
             Call
           </button>
@@ -38,7 +61,7 @@ export default function CallsHome() {
           </div>
           <button
             className="call-btn video-btn"
-            onClick={() => callUser(id, true)}
+            onClick={() => callUser(callTo, true)}
           >
             Call
           </button>
