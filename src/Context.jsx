@@ -4,7 +4,7 @@ import io from "socket.io-client";
 const CallContext = createContext();
 export const useCall = () => useContext(CallContext);
 
-const socket = io("https://chatting-wun1.onrender.com");
+const socket = io("http://localhost:5000");
 
 const config = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -15,6 +15,9 @@ export const CallProvider = ({ children }) => {
   const [incoming, setIncoming] = useState(null);
   const [callActive, setCallActive] = useState(false);
   const [messages, setMessages] = useState([]);
+
+  // 🟢 ONLINE USERS
+  const [onlineUsers, setOnlineUsers] = useState([]);
 
   const localVideo = useRef(null);
   const remoteVideo = useRef(null);
@@ -31,6 +34,12 @@ export const CallProvider = ({ children }) => {
 
     socket.on("connect", () => {
       console.log("✅ SOCKET CONNECTED");
+    });
+
+    // 🟢 ONLINE USERS LIST
+    socket.on("online-users", (users) => {
+      console.log("🟢 ONLINE USERS:", users);
+      setOnlineUsers(users);
     });
 
     socket.on("incoming-call", ({ from, offer, type }) => {
@@ -58,13 +67,13 @@ export const CallProvider = ({ children }) => {
 
     // 💬 RECEIVE MESSAGE
     socket.on("receive-message", (msg) => {
-      console.log("💬 MESSAGE RECEIVED:", msg);
       setMessages((prev) => [...prev, msg]);
     });
 
     socket.on("call-ended", endCall);
 
     return () => {
+      socket.off("online-users");
       socket.off("incoming-call");
       socket.off("call-answered");
       socket.off("ice-candidate");
@@ -165,6 +174,8 @@ export const CallProvider = ({ children }) => {
   const endCall = () => {
     peer.current?.close();
     localStream.current?.getTracks().forEach((t) => t.stop());
+    peer.current = null;
+
     setCallActive(false);
     setIncoming(null);
     remoteDescSet.current = false;
@@ -199,6 +210,9 @@ export const CallProvider = ({ children }) => {
         // 💬 CHAT
         messages,
         sendMessage,
+
+        // 🟢 ONLINE USERS
+        onlineUsers,
       }}
     >
       {children}

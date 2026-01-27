@@ -215,3 +215,39 @@ input::placeholder {
   text-align: right;
   color: #e9edef;
 }
+
+/* ================= ONLINE USERS ================= */
+
+.online-users {
+  background: #202c33;
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.online-users h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: #8696a0;
+}
+
+.user-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 14px;
+}
+
+.user-id {
+  color: #e9edef;
+}
+
+/* 🟢 GREEN DOT */
+.green-dot {
+  width: 10px;
+  height: 10px;
+  background: #25d366;
+  border-radius: 50%;
+  box-shadow: 0 0 6px #25d366;
+}
