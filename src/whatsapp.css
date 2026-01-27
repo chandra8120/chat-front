@@ -1,3 +1,4 @@
+/* 🌙 BASE */
 body {
   margin: 0;
   font-family: Arial, sans-serif;
@@ -5,7 +6,7 @@ body {
   color: #e9edef;
 }
 
-/* HEADER */
+/* ================= HEADER ================= */
 .header {
   background: #202c33;
   padding: 14px;
@@ -24,12 +25,12 @@ body {
   font-size: 11px;
 }
 
-/* PAGE */
+/* ================= PAGE ================= */
 .calls-page {
   padding: 16px;
 }
 
-/* CARD */
+/* ================= CARD ================= */
 .call-card {
   background: #202c33;
   padding: 16px;
@@ -50,25 +51,32 @@ body {
   font-size: 13px;
 }
 
-/* BUTTONS */
+/* ================= BUTTONS ================= */
 .call-btn {
-  padding: 10px 14px;
-  border-radius: 8px;
+  padding: 10px 16px;
+  border-radius: 10px;
   border: none;
   font-size: 14px;
   cursor: pointer;
-  color: white;
+  background: #2a3942;   /* 🔥 dark neutral */
+  color: #e9edef;
+}
+
+.call-btn:hover {
+  opacity: 0.9;
 }
 
 .audio-btn {
-  background: #25d366;
+  background: #25d366;   /* WhatsApp green */
+  color: #0b141a;
 }
 
 .video-btn {
-  background: #128c7e;
+  background: #00a884;   /* WhatsApp teal */
+  color: #0b141a;
 }
 
-/* INPUT */
+/* ================= INPUT ================= */
 input {
   width: 100%;
   padding: 12px;
@@ -79,37 +87,47 @@ input {
   color: white;
 }
 
-/* INCOMING */
+input::placeholder {
+  color: #8696a0;
+}
+
+/* ================= INCOMING CALL ================= */
 .incoming {
   height: 100vh;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
+  background: #0b141a;
 }
 
 .incoming button {
-  margin: 10px;
-  padding: 14px;
+  margin: 12px;
+  padding: 16px;
   border-radius: 50%;
   font-size: 18px;
+  border: none;
+  cursor: pointer;
 }
 
 .accept {
   background: #25d366;
+  color: #0b141a;
 }
 
 .reject {
   background: #e53935;
+  color: white;
 }
 
-/* CALL SCREEN */
+/* ================= CALL SCREEN ================= */
 .call-screen {
   height: 100vh;
   background: black;
   position: relative;
 }
 
+/* Remote video */
 .remote-video {
   position: absolute;
   inset: 0;
@@ -120,36 +138,80 @@ input {
   background: black;
 }
 
-
+/* Local video */
 .local-video {
   position: absolute;
   top: 12px;
   right: 12px;
-  width: 22vw;          /* 🔥 smaller */
-  max-width: 90px;      /* 🔥 WhatsApp-like */
+  width: 22vw;
+  max-width: 90px;
   aspect-ratio: 9 / 16;
   object-fit: cover;
   border-radius: 12px;
-  border: 2px solid white;
+  border: 2px solid #e9edef;
   z-index: 3;
   background: black;
 }
 
-/* CONTROLS */
+/* ================= CALL CONTROLS ================= */
 .controls {
   position: absolute;
   bottom: 30px;
   width: 100%;
   display: flex;
   justify-content: space-evenly;
+  z-index: 4;
 }
 
 .controls button {
-  padding: 14px;
+  padding: 16px;
   border-radius: 50%;
   font-size: 18px;
+  border: none;
+  cursor: pointer;
+  background: #2a3942;
+  color: white;
 }
 
 .end {
-  background: red;
+  background: #e53935;
+}
+
+/* ================= CHAT ================= */
+.chat-box {
+  margin-top: 16px;
+  background: #202c33;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.chat-box h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: #e9edef;
+}
+
+.messages {
+  max-height: 220px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+}
+
+/* Receiver message */
+.msg {
+  background: #2a3942;
+  padding: 8px 10px;
+  border-radius: 8px;
+  margin: 6px 0;
+  max-width: 75%;
+  color: #e9edef;
+  font-size: 13px;
+}
+
+/* Sender message */
+.msg.self {
+  background: #005c4b;
+  margin-left: auto;
+  text-align: right;
+  color: #e9edef;
 }

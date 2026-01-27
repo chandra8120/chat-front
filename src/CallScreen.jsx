@@ -7,6 +7,7 @@ export default function CallScreen() {
     localVideo,
     remoteVideo,
     remoteAudio,
+    endCall,          // 🔥 CUT FUNCTION
   } = useCall();
 
   // 🔥 FORCE AUDIO PLAY (AUTOPLAY FIX)
@@ -26,14 +27,35 @@ export default function CallScreen() {
     }
   }, [callActive]);
 
+  // ❌ Call active lekapothe screen chupinchakudadu
+  if (!callActive) return null;
+
   return (
     <div className="call-screen">
-      {/* VIDEO (if video call) */}
-      <video ref={remoteVideo} autoPlay playsInline />
-      <video ref={localVideo} autoPlay muted playsInline className="local-video" />
+      {/* 🌍 REMOTE VIDEO */}
+      <video
+        ref={remoteVideo}
+        autoPlay
+        playsInline
+        className="remote-video"
+      />
 
-      {/* 🔊 AUDIO MUST ALWAYS EXIST */}
+      {/* 🧍 LOCAL VIDEO */}
+      <video
+        ref={localVideo}
+        autoPlay
+        muted
+        playsInline
+        className="local-video"
+      />
+
+      {/* 🔊 AUDIO */}
       <audio ref={remoteAudio} />
+
+      {/* ❌ CALL CUT BUTTON (HERE ONLY) */}
+      <div className="controls">
+        <button className="end" onClick={endCall}>❌</button>
+      </div>
     </div>
   );
 }

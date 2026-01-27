@@ -4,16 +4,17 @@ import io from "socket.io-client";
 const CallContext = createContext();
 export const useCall = () => useContext(CallContext);
 
-const socket = io("https://chatting-wun1.onrender.com");
+const socket = io("http://localhost:5000");
 
 const config = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
 };
 
 export const CallProvider = ({ children }) => {
-  const [myId, setMyId] = useState("");           // 🔥 MANUAL ID
+  const [myId, setMyId] = useState("");
   const [incoming, setIncoming] = useState(null);
   const [callActive, setCallActive] = useState(false);
+  const [messages, setMessages] = useState([]);
 
   const localVideo = useRef(null);
   const remoteVideo = useRef(null);
@@ -24,16 +25,15 @@ export const CallProvider = ({ children }) => {
   const iceQueue = useRef([]);
   const remoteDescSet = useRef(false);
 
+  // 🔌 SOCKET INIT
   useEffect(() => {
     console.log("📡 INIT SOCKET");
 
     socket.on("connect", () => {
       console.log("✅ SOCKET CONNECTED");
-      // ❌ DO NOT set socket.id here
     });
 
     socket.on("incoming-call", ({ from, offer, type }) => {
-      console.log("📞 INCOMING CALL from", from);
       setIncoming({ from, offer, type });
     });
 
@@ -48,11 +48,18 @@ export const CallProvider = ({ children }) => {
 
     socket.on("ice-candidate", ({ candidate }) => {
       if (!peer.current) return;
+
       if (remoteDescSet.current) {
         peer.current.addIceCandidate(candidate);
       } else {
         iceQueue.current.push(candidate);
       }
+    });
+
+    // 💬 RECEIVE MESSAGE
+    socket.on("receive-message", (msg) => {
+      console.log("💬 MESSAGE RECEIVED:", msg);
+      setMessages((prev) => [...prev, msg]);
     });
 
     socket.on("call-ended", endCall);
@@ -61,18 +68,19 @@ export const CallProvider = ({ children }) => {
       socket.off("incoming-call");
       socket.off("call-answered");
       socket.off("ice-candidate");
+      socket.off("receive-message");
       socket.off("call-ended");
     };
   }, []);
 
-  // 🔐 REGISTER MANUAL ID
+  // 🔐 REGISTER USER
   const registerUser = (id) => {
     if (!id) return;
     setMyId(id);
     socket.emit("register", id);
-    console.log("🆔 REGISTERED AS:", id);
   };
 
+  // 🎤 MEDIA
   const startMedia = async (video) => {
     localStream.current = await navigator.mediaDevices.getUserMedia({
       audio: true,
@@ -84,6 +92,7 @@ export const CallProvider = ({ children }) => {
     }
   };
 
+  // 🔗 PEER
   const createPeer = (to) => {
     const pc = new RTCPeerConnection(config);
 
@@ -115,6 +124,7 @@ export const CallProvider = ({ children }) => {
     iceQueue.current = [];
   };
 
+  // 📞 CALL USER
   const callUser = async (to, video) => {
     if (!to) return;
     await startMedia(video);
@@ -130,6 +140,7 @@ export const CallProvider = ({ children }) => {
     });
   };
 
+  // ✅ ACCEPT CALL
   const acceptCall = async () => {
     await startMedia(incoming.type === "video");
     peer.current = createPeer(incoming.from);
@@ -150,6 +161,7 @@ export const CallProvider = ({ children }) => {
     setIncoming(null);
   };
 
+  // ❌ END CALL
   const endCall = () => {
     peer.current?.close();
     localStream.current?.getTracks().forEach((t) => t.stop());
@@ -158,11 +170,23 @@ export const CallProvider = ({ children }) => {
     remoteDescSet.current = false;
   };
 
+  // 💬 SEND MESSAGE
+  const sendMessage = (to, message) => {
+    if (!to || !message) return;
+
+    socket.emit("send-message", { to, message });
+
+    setMessages((prev) => [
+      ...prev,
+      { from: myId, message, time: Date.now(), self: true },
+    ]);
+  };
+
   return (
     <CallContext.Provider
       value={{
         myId,
-        registerUser,   // 🔥 expose this
+        registerUser,
         callUser,
         incoming,
         acceptCall,
@@ -171,6 +195,10 @@ export const CallProvider = ({ children }) => {
         localVideo,
         remoteVideo,
         remoteAudio,
+
+        // 💬 CHAT
+        messages,
+        sendMessage,
       }}
     >
       {children}
