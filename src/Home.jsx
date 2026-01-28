@@ -14,7 +14,7 @@ export default function CallsHome() {
   const [myInputId, setMyInputId] = useState("");
   const [callTo, setCallTo] = useState("");
 
-  // 🔥 Call active unte home screen hide
+  // 🔥 Call active unte home screen 
   if (callActive) return null;
 
   // 🔐 REGISTER SCREEN
