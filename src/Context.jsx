@@ -4,7 +4,7 @@ import io from "socket.io-client";
 const CallContext = createContext();
 export const useCall = () => useContext(CallContext);
 
-const socket = io("https://chatting-wun1.onrender.com");
+const socket = io("http://localhost:5000");
 
 const config = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -90,43 +90,47 @@ export const CallProvider = ({ children }) => {
   };
 
   // 🎤 MEDIA
-  const startMedia = async (video) => {
-    localStream.current = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-      video,
-    });
 
-    if (video && localVideo.current) {
-      localVideo.current.srcObject = localStream.current;
+  const startMedia = async (video) => {
+  localStream.current = await navigator.mediaDevices.getUserMedia({
+    audio: true,
+    video: video ? { facingMode: "user" } : false,
+  });
+
+  if (video && localVideo.current) {
+    localVideo.current.srcObject = localStream.current;
+  }
+};
+
+  // 🔗 PEER
+const createPeer = (to) => {
+  const pc = new RTCPeerConnection(config);
+
+  localStream.current.getTracks().forEach((track) =>
+    pc.addTrack(track, localStream.current)
+  );
+
+  pc.ontrack = (event) => {
+    const stream = event.streams[0];
+
+    if (remoteVideo.current && !remoteVideo.current.srcObject) {
+      remoteVideo.current.srcObject = stream;
+    }
+
+    if (remoteAudio.current && !remoteAudio.current.srcObject) {
+      remoteAudio.current.srcObject = stream;
     }
   };
 
-  // 🔗 PEER
-  const createPeer = (to) => {
-    const pc = new RTCPeerConnection(config);
-
-    localStream.current.getTracks().forEach((track) =>
-      pc.addTrack(track, localStream.current)
-    );
-
-    pc.ontrack = (event) => {
-      if (event.track.kind === "audio" && remoteAudio.current) {
-        remoteAudio.current.srcObject = new MediaStream([event.track]);
-      }
-
-      if (event.track.kind === "video" && remoteVideo.current) {
-        remoteVideo.current.srcObject = new MediaStream([event.track]);
-      }
-    };
-
-    pc.onicecandidate = (e) => {
-      if (e.candidate) {
-        socket.emit("ice-candidate", { to, candidate: e.candidate });
-      }
-    };
-
-    return pc;
+  pc.onicecandidate = (e) => {
+    if (e.candidate) {
+      socket.emit("ice-candidate", { to, candidate: e.candidate });
+    }
   };
+
+  return pc;
+};
+
 
   const flushIce = () => {
     iceQueue.current.forEach((c) => peer.current.addIceCandidate(c));
@@ -150,25 +154,37 @@ export const CallProvider = ({ children }) => {
   };
 
   // ✅ ACCEPT CALL
-  const acceptCall = async () => {
-    await startMedia(incoming.type === "video");
-    peer.current = createPeer(incoming.from);
 
-    await peer.current.setRemoteDescription(incoming.offer);
-    remoteDescSet.current = true;
-    flushIce();
+const acceptCall = async () => {
+  await startMedia(incoming.type === "video");
+  peer.current = createPeer(incoming.from);
 
-    const answer = await peer.current.createAnswer();
-    await peer.current.setLocalDescription(answer);
+  await peer.current.setRemoteDescription(incoming.offer);
+  remoteDescSet.current = true;
+  flushIce();
 
-    socket.emit("answer-call", {
-      to: incoming.from,
-      answer,
-    });
+  const answer = await peer.current.createAnswer();
+  await peer.current.setLocalDescription(answer);
 
-    setCallActive(true);
-    setIncoming(null);
-  };
+  socket.emit("answer-call", {
+    to: incoming.from,
+    answer,
+  });
+
+  // 🔊 CRITICAL LINE — AUDIO START
+  setTimeout(() => {
+    if (remoteAudio.current) {
+      remoteAudio.current.muted = false;
+      remoteAudio.current.volume = 1;
+      remoteAudio.current.play()
+        .then(() => console.log("🔊 AUDIO PLAYING"))
+        .catch((e) => console.log("❌ AUDIO FAIL", e));
+    }
+  }, 100);
+
+  setCallActive(true);
+  setIncoming(null);
+};
 
   // ❌ END CALL
   const endCall = () => {

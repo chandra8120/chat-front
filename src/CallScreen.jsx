@@ -7,55 +7,62 @@ export default function CallScreen() {
     localVideo,
     remoteVideo,
     remoteAudio,
-    endCall,          // 🔥 CUT FUNCTION
+    endCall,
   } = useCall();
 
-  // 🔥 FORCE AUDIO PLAY (AUTOPLAY FIX)
   useEffect(() => {
-    if (callActive && remoteAudio?.current) {
-      remoteAudio.current.muted = false;
-      remoteAudio.current.volume = 1;
+    if (!callActive) return;
 
-      const playPromise = remoteAudio.current.play();
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => console.log("🔊 AUDIO PLAYING"))
-          .catch((e) =>
-            console.warn("⚠️ AUDIO PLAY BLOCKED – USER INTERACTION NEEDED", e)
-          );
-      }
-    }
+    const audio = remoteAudio.current;
+    if (!audio) return;
+
+    audio.muted = false;
+    audio.volume = 1;
+
+    const startAudio = () => {
+      audio.play()
+        .then(() => console.log("🔊 AUDIO PLAYING"))
+        .catch((e) => console.log("❌ AUDIO FAIL", e));
+
+      document.removeEventListener("click", startAudio);
+    };
+
+    // 🔥 Browser autoplay restriction fix
+    document.addEventListener("click", startAudio);
+
+    return () => {
+      document.removeEventListener("click", startAudio);
+    };
   }, [callActive]);
 
-  // ❌ Call active lekapothe screen chupinchakudadu
-  if (!callActive) return null;
-
   return (
-    <div className="call-screen">
-      {/* 🌍 REMOTE VIDEO */}
-      <video
-        ref={remoteVideo}
-        autoPlay
-        playsInline
-        className="remote-video"
-      />
-
-      {/* 🧍 LOCAL VIDEO */}
-      <video
-        ref={localVideo}
-        autoPlay
-        muted
-        playsInline
-        className="local-video"
-      />
-
-      {/* 🔊 AUDIO */}
+    <>
+      {/* 🔊 AUDIO MUST ALWAYS EXIST (NEVER REMOVE THIS) */}
       <audio ref={remoteAudio} />
 
-      {/* ❌ CALL CUT BUTTON (HERE ONLY) */}
-      <div className="controls">
-        <button className="end" onClick={endCall}>❌</button>
-      </div>
-    </div>
+      {/* 👇 UI ONLY WHEN CALL ACTIVE */}
+      {callActive && (
+        <div className="call-screen">
+          <video
+            ref={remoteVideo}
+            autoPlay
+            playsInline
+            className="remote-video"
+          />
+
+          <video
+            ref={localVideo}
+            autoPlay
+            muted
+            playsInline
+            className="local-video"
+          />
+
+          <div className="controls">
+            <button className="end" onClick={endCall}>❌</button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
