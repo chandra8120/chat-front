@@ -4,7 +4,7 @@ import io from "socket.io-client";
 const CallContext = createContext();
 export const useCall = () => useContext(CallContext);
 
-// const socket = io("http://localhost:5000");
+// 🔌 SOCKET
 const socket = io("https://chatting-wun1.onrender.com");
 
 const config = {
@@ -16,30 +16,25 @@ export const CallProvider = ({ children }) => {
   const [incoming, setIncoming] = useState(null);
   const [callActive, setCallActive] = useState(false);
   const [messages, setMessages] = useState([]);
-
-  // 🟢 ONLINE USERS
   const [onlineUsers, setOnlineUsers] = useState([]);
 
   const localVideo = useRef(null);
   const remoteVideo = useRef(null);
   const remoteAudio = useRef(null);
+
   const localStream = useRef(null);
   const peer = useRef(null);
 
   const iceQueue = useRef([]);
   const remoteDescSet = useRef(false);
 
-  // 🔌 SOCKET INIT
+  /* ================= SOCKET INIT ================= */
   useEffect(() => {
-    console.log("📡 INIT SOCKET");
-
     socket.on("connect", () => {
       console.log("✅ SOCKET CONNECTED");
     });
 
-    // 🟢 ONLINE USERS LIST
     socket.on("online-users", (users) => {
-      console.log("🟢 ONLINE USERS:", users);
       setOnlineUsers(users);
     });
 
@@ -66,7 +61,6 @@ export const CallProvider = ({ children }) => {
       }
     });
 
-    // 💬 RECEIVE MESSAGE
     socket.on("receive-message", (msg) => {
       setMessages((prev) => [...prev, msg]);
     });
@@ -74,73 +68,73 @@ export const CallProvider = ({ children }) => {
     socket.on("call-ended", endCall);
 
     return () => {
-      socket.off("online-users");
-      socket.off("incoming-call");
-      socket.off("call-answered");
-      socket.off("ice-candidate");
-      socket.off("receive-message");
-      socket.off("call-ended");
+      socket.off();
     };
   }, []);
 
-  // 🔐 REGISTER USER
+  /* ================= REGISTER ================= */
   const registerUser = (id) => {
     if (!id) return;
     setMyId(id);
     socket.emit("register", id);
   };
 
-  // 🎤 MEDIA
-
+  /* ================= MEDIA ================= */
   const startMedia = async (video) => {
-  localStream.current = await navigator.mediaDevices.getUserMedia({
-    audio: true,
-    video: video ? { facingMode: "user" } : false,
-  });
+    localStream.current = await navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: video ? { facingMode: "user" } : false,
+    });
 
-  if (video && localVideo.current) {
-    localVideo.current.srcObject = localStream.current;
-  }
-};
-
-  // 🔗 PEER
-const createPeer = (to) => {
-  const pc = new RTCPeerConnection(config);
-
-  localStream.current.getTracks().forEach((track) =>
-    pc.addTrack(track, localStream.current)
-  );
-
-  pc.ontrack = (event) => {
-    const stream = event.streams[0];
-
-    if (remoteVideo.current && !remoteVideo.current.srcObject) {
-      remoteVideo.current.srcObject = stream;
-    }
-
-    if (remoteAudio.current && !remoteAudio.current.srcObject) {
-      remoteAudio.current.srcObject = stream;
+    if (video && localVideo.current) {
+      localVideo.current.srcObject = localStream.current;
     }
   };
 
-  pc.onicecandidate = (e) => {
-    if (e.candidate) {
-      socket.emit("ice-candidate", { to, candidate: e.candidate });
-    }
+  /* ================= PEER ================= */
+  const createPeer = (to) => {
+    const pc = new RTCPeerConnection(config);
+
+    // add local tracks
+    localStream.current.getTracks().forEach((track) => {
+      pc.addTrack(track, localStream.current);
+    });
+
+    // 🔥 SINGLE REMOTE STREAM (IMPORTANT)
+    const remoteStream = new MediaStream();
+
+    pc.ontrack = (event) => {
+      console.log("🎥 TRACK:", event.track.kind);
+
+      remoteStream.addTrack(event.track);
+
+      if (remoteVideo.current) {
+        remoteVideo.current.srcObject = remoteStream;
+      }
+
+      if (remoteAudio.current) {
+        remoteAudio.current.srcObject = remoteStream;
+      }
+    };
+
+    pc.onicecandidate = (e) => {
+      if (e.candidate) {
+        socket.emit("ice-candidate", { to, candidate: e.candidate });
+      }
+    };
+
+    return pc;
   };
-
-  return pc;
-};
-
 
   const flushIce = () => {
     iceQueue.current.forEach((c) => peer.current.addIceCandidate(c));
     iceQueue.current = [];
   };
 
-  // 📞 CALL USER
+  /* ================= CALL ================= */
   const callUser = async (to, video) => {
     if (!to) return;
+
     await startMedia(video);
     peer.current = createPeer(to);
 
@@ -154,51 +148,43 @@ const createPeer = (to) => {
     });
   };
 
-  // ✅ ACCEPT CALL
+  /* ================= ACCEPT ================= */
+  const acceptCall = async () => {
+    await startMedia(incoming.type === "video");
+    peer.current = createPeer(incoming.from);
 
-const acceptCall = async () => {
-  await startMedia(incoming.type === "video");
-  peer.current = createPeer(incoming.from);
+    await peer.current.setRemoteDescription(incoming.offer);
+    remoteDescSet.current = true;
+    flushIce();
 
-  await peer.current.setRemoteDescription(incoming.offer);
-  remoteDescSet.current = true;
-  flushIce();
+    const answer = await peer.current.createAnswer();
+    await peer.current.setLocalDescription(answer);
 
-  const answer = await peer.current.createAnswer();
-  await peer.current.setLocalDescription(answer);
+    socket.emit("answer-call", {
+      to: incoming.from,
+      answer,
+    });
 
-  socket.emit("answer-call", {
-    to: incoming.from,
-    answer,
-  });
+    setCallActive(true);
+    setIncoming(null);
+  };
 
-  // 🔊 CRITICAL LINE — AUDIO START
-  setTimeout(() => {
-    if (remoteAudio.current) {
-      remoteAudio.current.muted = false;
-      remoteAudio.current.volume = 1;
-      remoteAudio.current.play()
-        .then(() => console.log("🔊 AUDIO PLAYING"))
-        .catch((e) => console.log("❌ AUDIO FAIL", e));
-    }
-  }, 100);
-
-  setCallActive(true);
-  setIncoming(null);
-};
-
-  // ❌ END CALL
+  /* ================= END ================= */
   const endCall = () => {
     peer.current?.close();
-    localStream.current?.getTracks().forEach((t) => t.stop());
-    peer.current = null;
 
+    localStream.current?.getTracks().forEach((t) => t.stop());
+
+    if (remoteVideo.current) remoteVideo.current.srcObject = null;
+    if (remoteAudio.current) remoteAudio.current.srcObject = null;
+
+    peer.current = null;
     setCallActive(false);
     setIncoming(null);
     remoteDescSet.current = false;
   };
 
-  // 💬 SEND MESSAGE
+  /* ================= CHAT ================= */
   const sendMessage = (to, message) => {
     if (!to || !message) return;
 
@@ -220,15 +206,13 @@ const acceptCall = async () => {
         acceptCall,
         endCall,
         callActive,
+
         localVideo,
         remoteVideo,
         remoteAudio,
 
-        // 💬 CHAT
         messages,
         sendMessage,
-
-        // 🟢 ONLINE USERS
         onlineUsers,
       }}
     >
